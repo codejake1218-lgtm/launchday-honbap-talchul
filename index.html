@@ -57,7 +57,8 @@ h1, h2, h3 { font-family: var(--title); margin: 0; line-height: 1.2; letter-spac
 .ticket__body h3 { font-size: 19px; }
 .where { margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
 .note { margin: 6px 0 0; font-size: 14px; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.row > .btn { margin-left: auto; }
 .seats { white-space: nowrap; display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; }
 .seat { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink); }
 .seat.on { background: var(--tomato); }
