@@ -116,6 +116,17 @@ dialog::backdrop { background: rgba(33,27,23,.55); }
 .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-weight: 600; }
 .check input { width: 22px; height: 22px; flex: none; margin-top: 2px; accent-color: var(--tomato); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--paper); font-weight: 700; font-size: 14px; z-index: 20; white-space: nowrap; }
+/* 방명록 */
+.guest { margin-top: 40px; padding-top: 24px; border-top: 2px dashed var(--line); }
+.guest h2 { font-size: 22px; }
+.guest .sub { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
+.guest form { display: grid; grid-template-columns: 110px 1fr; gap: 8px; margin-top: 14px; }
+.guest form .btn { grid-column: 1 / -1; min-height: 48px; }
+.guest__list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.guest__list li { padding: 10px 12px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; overflow-wrap: anywhere; }
+.guest__list b { font-size: 14px; }
+.guest__list time { margin-left: 6px; font-size: 12px; color: var(--ink-2); }
+.guest__list p { margin: 2px 0 0; font-size: 15px; }
 footer { margin-top: 36px; font-size: 13px; color: var(--ink-2); text-align: center; }
 [hidden] { display: none !important; }
 @media (min-width: 480px) { .logo { font-size: 56px; } }
@@ -182,6 +193,18 @@ footer { margin-top: 36px; font-size: 13px; color: var(--ink-2); text-align: cen
       <div id="mineList"></div>
     </section>
   </main>
+
+  <section class="guest" aria-labelledby="guestTitle">
+    <h2 id="guestTitle">방명록</h2>
+    <p class="sub">혼밥탈출을 써 본 한마디를 남겨 주세요. 모두에게 보이니 실명·연락처는 적지 마세요.</p>
+    <form id="guestForm" novalidate>
+      <input class="input" id="guestName" maxlength="10" placeholder="별명" aria-label="별명" required>
+      <input class="input" id="guestText" maxlength="80" placeholder="한마디 (80자까지)" aria-label="한마디" required>
+      <button class="btn" type="submit" id="guestBtn">남기기</button>
+    </form>
+    <p class="msg" id="guestMsg" role="alert" hidden></p>
+    <ul class="guest__list" id="guestList"></ul>
+  </section>
 
   <footer>
     수업용 시제품 · 모든 방과 사용자는 가상 데이터입니다.<br>
@@ -427,6 +450,47 @@ $("#makeForm").addEventListener("submit", (e) => {
     render(); go("mine"); toast("방을 열었어요");
   });
 });
+
+/* ── 방명록 (슈파베이스에 저장: 이름, 한마디, 작성 시각) ── */
+// 아래 키는 브라우저에 공개해도 되는 공개용(publishable) 키다. 읽기와 새 글 쓰기만 허용된다(RLS).
+const SB_URL = "https://vyoasdvwtjprfspsaoci.supabase.co/rest/v1/guestbook";
+const SB_KEY = "sb_publishable_zp-2bYiGrxJ0_7O0yRkR0g_oQnnbCOH";
+const SB_HEAD = { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY };
+function guestTime(iso) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function guestMsg(text) { const m = $("#guestMsg"); m.textContent = text || ""; m.hidden = !text; }
+async function loadGuest() {
+  const list = $("#guestList");
+  try {
+    const res = await fetch(SB_URL + "?select=name,message,created_at&order=created_at.desc&limit=30", { headers: SB_HEAD });
+    if (!res.ok) throw new Error(res.status);
+    const rows = await res.json();
+    list.replaceChildren(...(rows.length
+      ? rows.map((r) => h("li", null, h("b", null, r.name), h("time", { datetime: r.created_at }, guestTime(r.created_at)), h("p", null, r.message)))
+      : [h("li", null, h("p", null, "아직 글이 없어요. 첫 한마디를 남겨 보세요."))]));
+  } catch (e) {
+    list.replaceChildren(h("li", null, h("p", null, "방명록을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.")));
+  }
+}
+$("#guestForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#guestName").value.trim(), message = $("#guestText").value.trim(), btn = $("#guestBtn");
+  guestMsg("");
+  if (!name) return guestMsg("별명을 입력해 주세요.");
+  if (!message) return guestMsg("한마디를 입력해 주세요.");
+  btn.disabled = true;
+  try {
+    const res = await fetch(SB_URL, { method: "POST", headers: { ...SB_HEAD, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ name, message }) });
+    if (!res.ok) throw new Error(res.status);
+    $("#guestText").value = ""; toast("방명록에 남겼어요"); await loadGuest();
+  } catch (err) {
+    guestMsg("저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+  } finally { btn.disabled = false; }
+});
+if (state.nick) $("#guestName").value = state.nick;
+loadGuest();
 
 render();
 </script>
