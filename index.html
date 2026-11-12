@@ -30,6 +30,9 @@ h1, h2, h3 { font-family: var(--title); margin: 0; line-height: 1.2; letter-spac
 .logo span { color: var(--tomato); }
 .lead { margin: 8px 0 0; color: var(--ink-2); font-size: 16px; }
 .lead b { color: var(--ink); }
+.who { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 14px; }
+.who b { font-size: 15px; }
+.who .btn { min-height: 36px; padding: 0 12px; font-size: 13px; border-width: 1.5px; }
 
 /* 탭(핵심 기능 버튼 3개) */
 .tabs { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 0; background: var(--paper); }
@@ -139,6 +142,7 @@ footer { margin-top: 36px; font-size: 13px; color: var(--ink-2); text-align: cen
     <span class="proto">수업용 시제품</span>
     <h1 class="logo">혼밥<span>탈출</span></h1>
     <p class="lead">혼자 밥 먹기 외로운 날, <b>언제·어디서·무엇을</b> 먹을지만 보고 3~4명이 같이 먹어요.</p>
+    <p class="who"><span id="whoText"></span><button class="btn btn--ghost" type="button" id="whoBtn"></button></p>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="핵심 기능">
@@ -226,6 +230,19 @@ footer { margin-top: 36px; font-size: 13px; color: var(--ink-2); text-align: cen
     <label class="check"><input type="checkbox" id="adult" required><span>만 19세 이상이며 위 약속을 지킬게요. <span class="demo">데모</span><br><small style="font-weight:500;color:var(--ink-2)">실제 본인 확인은 하지 않습니다. 실명·연락처는 적지 마세요.</small></span></label>
     <p class="msg" id="helloMsg" role="alert" hidden></p>
     <button class="btn btn--block" type="submit">시작하기</button>
+  </form>
+</dialog>
+
+<dialog id="nickDlg" aria-labelledby="nickTitle">
+  <form class="sheet" id="nickForm" method="dialog">
+    <div class="sheet__head">
+      <h2 id="nickTitle">별명 바꾸기</h2>
+      <button class="x" type="button" id="nickClose" aria-label="닫기">×</button>
+    </div>
+    <p class="sub" style="margin:6px 0 0;color:var(--ink-2);font-size:14px">참여 중인 방과 내가 쓴 채팅의 별명도 함께 바뀌어요. 방명록에 이미 남긴 글은 바뀌지 않아요.</p>
+    <label class="field"><span>새 별명 (10자까지)</span><input class="input" id="nickNew" maxlength="10" required></label>
+    <p class="msg" id="nickMsg" role="alert" hidden></p>
+    <button class="btn btn--block" type="submit">바꾸기</button>
   </form>
 </dialog>
 
@@ -338,6 +355,7 @@ function render() {
   $("#mineList").replaceChildren(...(mine.length ? mine.map(ticket) : [
     h("div", { class: "empty" }, h("b", null, "아직 참여한 밥약이 없어요"), "밥약 찾기에서 마음에 드는 방에 참여해 보세요.",
       h("div", null, h("button", { class: "btn", type: "button", style: "margin-top:12px", onclick: () => go("find") }, "밥약 찾기")))]));
+  drawWho();
   if (openId) drawRoom();
 }
 function go(view) {
@@ -346,6 +364,38 @@ function go(view) {
   window.scrollTo({ top: 0 });
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => go(t.dataset.view)));
+
+/* ── 내 별명 보기·바꾸기 ── */
+function nickError(nick) { // 문제가 있으면 안내 문구, 없으면 ""
+  if (!nick) return "별명을 입력해 주세요.";
+  if (nick.startsWith("가상 사용자")) return "다른 별명을 써 주세요.";
+  if (state.rooms.some((r) => r.members.includes(nick))) return "이미 방에서 쓰이고 있는 별명이에요. 다른 별명을 써 주세요.";
+  return "";
+}
+function drawWho() {
+  $("#whoText").replaceChildren(...(state.nick ? ["내 별명 ", h("b", null, state.nick)] : ["아직 별명이 없어요"]));
+  $("#whoBtn").textContent = state.nick ? "바꾸기" : "별명 정하기";
+}
+$("#whoBtn").addEventListener("click", () => {
+  if (!state.nick) return needNick(() => toast("별명을 정했어요"));
+  $("#nickNew").value = state.nick; $("#nickMsg").hidden = true;
+  $("#nickDlg").showModal(); $("#nickNew").select();
+});
+$("#nickClose").addEventListener("click", () => $("#nickDlg").close());
+$("#nickDlg").addEventListener("click", (e) => { if (e.target === $("#nickDlg")) $("#nickDlg").close(); });
+$("#nickForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const old = state.nick, nick = $("#nickNew").value.trim(), msg = $("#nickMsg");
+  if (nick === old) return $("#nickDlg").close();
+  const err = nickError(nick);
+  if (err) { msg.textContent = err; msg.hidden = false; return; }
+  for (const r of state.rooms) { // 참여한 방과 내가 쓴 채팅의 이름도 함께 바꾼다
+    r.members = r.members.map((m) => (m === old ? nick : m));
+    for (const m of r.msgs) if (m.who === old) m.who = nick;
+  }
+  if ($("#guestName").value.trim() === old) $("#guestName").value = nick;
+  state.nick = nick; save(); $("#nickDlg").close(); render(); toast("별명을 바꿨어요");
+});
 
 /* ── 처음 안내: 별명 + 약속 ── */
 let afterHello = null;
@@ -357,10 +407,11 @@ $("#helloForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const nick = $("#nick").value.trim(), msg = $("#helloMsg");
   msg.hidden = true;
-  if (!nick) { msg.textContent = "별명을 입력해 주세요."; msg.hidden = false; return; }
-  if (nick.startsWith("가상 사용자")) { msg.textContent = "다른 별명을 써 주세요."; msg.hidden = false; return; }
+  const err = nickError(nick);
+  if (err) { msg.textContent = err; msg.hidden = false; return; }
   if (!$("#adult").checked) { msg.textContent = "약속에 체크해 주세요."; msg.hidden = false; return; }
-  state.nick = nick; save(); $("#hello").close();
+  state.nick = nick; save(); $("#hello").close(); drawWho();
+  if (!$("#guestName").value) $("#guestName").value = nick;
   const next = afterHello; afterHello = null; next && next();
 });
 
