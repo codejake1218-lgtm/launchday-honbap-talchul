@@ -357,8 +357,10 @@ function leave(id) {
   if (r.mine && r.members.length === 0) state.rooms = state.rooms.filter((x) => x.id !== id); // 방장이 혼자 나가면 방을 닫는다
   save(); closeRoom(); render(); toast("방에서 나왔어요");
 }
+let armed = null; // 신고는 두 번 눌러야 된다 (실수 방지)
 function report(id) {
-  if (!confirm("이 방을 신고하고 내 목록에서 숨길까요?\n(데모: 운영자에게 전달되지는 않아요)")) return;
+  if (armed !== id) { armed = id; drawRoom(); return; }
+  armed = null;
   const r = state.rooms.find((x) => x.id === id);
   if (r) r.members = r.members.filter((m) => m !== state.nick);
   state.hidden.push(id); save(); closeRoom(); render(); toast("신고하고 숨겼어요");
@@ -366,8 +368,8 @@ function report(id) {
 
 /* ── 방 상세 + 채팅(데모) ── */
 function openRoom(id) { openId = id; drawRoom(); if (!$("#roomDlg").open) $("#roomDlg").showModal(); }
-function closeRoom() { openId = null; if ($("#roomDlg").open) $("#roomDlg").close(); }
-$("#roomDlg").addEventListener("close", () => (openId = null));
+function closeRoom() { openId = null; armed = null; if ($("#roomDlg").open) $("#roomDlg").close(); }
+$("#roomDlg").addEventListener("close", () => { openId = null; armed = null; });
 $("#roomDlg").addEventListener("click", (e) => { if (e.target === $("#roomDlg")) closeRoom(); });
 function drawRoom() {
   const r = state.rooms.find((x) => x.id === openId);
@@ -400,7 +402,8 @@ function drawRoom() {
     h("div", { class: "sheet__foot" },
       mine ? h("button", { class: "btn btn--ghost", type: "button", onclick: () => leave(r.id) }, "나가기")
         : h("button", { class: "btn", type: "button", disabled: full, onclick: () => join(r.id) }, full ? "마감" : "참여하기"),
-      h("button", { class: "btn btn--ghost", type: "button", onclick: () => report(r.id) }, "신고·숨기기")));
+      h("button", { class: "btn btn--ghost", type: "button", onclick: () => report(r.id) }, armed === r.id ? "한 번 더 누르면 신고돼요" : "신고·숨기기")),
+    armed === r.id ? h("p", { class: "msg" }, "신고하면 이 방이 내 목록에서 사라져요. (데모: 운영자에게 전달되지는 않아요)") : null);
   log.scrollTop = log.scrollHeight;
 }
 
